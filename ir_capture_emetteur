@@ -1,0 +1,66 @@
+#include <IRremote.h>
+
+// Broches pour le récepteur et l'émetteur IR
+const uint16_t kRecvPin = 2; // Récepteur IR (connecté à la broche D2)
+const uint16_t kIrLed = 3;   // LED IR pour émission (connectée à la broche D3)
+
+// Objets IR
+IRrecv irrecv(kRecvPin);
+IRsend irsend(kIrLed);
+decode_results results;
+
+// Tableau pour stocker les codes IR capturés
+#define MAX_CODES 10
+uint32_t storedCodes[MAX_CODES]; // Stocke jusqu'à 10 codes IR
+int codeCount = 0;               // Nombre de codes capturés
+
+void setup() {
+  Serial.begin(9600);
+
+  // Initialisation du récepteur et de l'émetteur IR
+  irrecv.enableIRIn();
+  irsend.begin();
+
+  Serial.println("Système prêt. Appuyez sur un bouton de télécommande pour capturer un signal.");
+  Serial.println("Utilisez la commande 'send <index>' pour envoyer un signal capturé.");
+}
+
+void loop() {
+  // Capturer les signaux IR
+  if (irrecv.decode(&results)) {
+    if (codeCount < MAX_CODES) {
+      storedCodes[codeCount] = results.value; // Stocker le code capturé
+      Serial.print("Code capturé (index ");
+      Serial.print(codeCount);
+      Serial.print(") : ");
+      Serial.println(results.value, HEX);
+      codeCount++;
+    } else {
+      Serial.println("Mémoire pleine, impossible de capturer plus de codes.");
+    }
+    irrecv.resume(); // Préparer pour le prochain signal
+  }
+
+  // Lire les commandes depuis le moniteur série
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n'); // Lire la commande
+    command.trim(); // Supprimer les espaces inutiles
+
+    if (command.startsWith("send")) {
+      // Extraire l'index depuis la commande
+      int index = command.substring(5).toInt();
+      if (index >= 0 && index < codeCount) {
+        irsend.sendNEC(storedCodes[index], 32); // Émettre le signal IR
+        Serial.print("Signal envoyé (index ");
+        Serial.print(index);
+        Serial.print(") : ");
+        Serial.println(storedCodes[index], HEX);
+      } else {
+        Serial.println("Index invalide. Assurez-vous que l'index est compris entre 0 et ");
+        Serial.print(codeCount - 1);
+      }
+    } else {
+      Serial.println("Commande inconnue. Utilisez 'send <index>' pour envoyer un signal.");
+    }
+  }
+}
